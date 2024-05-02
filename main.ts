@@ -1,20 +1,24 @@
-import { Plugin, App, Modal, MarkdownView, Notice, Editor, TFile, TAbstractFile, requestUrl } from 'obsidian';
+import { App, Modal, MarkdownView, Notice, Editor, TFile, TAbstractFile, requestUrl, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
-interface PaperlessNgxSettings {
+export interface PaperlessNgxSettings {
   apiUrl: string;
   dummyFolder: string;
 }
 
-const DEFAULT_SETTINGS: PaperlessNgxSettings = {
+export const DEFAULT_SETTINGS: PaperlessNgxSettings = {
   apiUrl: 'http://192.168.1.100:1280/api',
-  dummyFolder: 'Anhänge/paperless-ngx'
+  dummyFolder: 'attachments/paperless-ngx'
 };
 
 export default class PaperlessNgxPlugin extends Plugin {
-  settings: PaperlessNgxSettings;
+  public settings: PaperlessNgxSettings;
 
   async onload() {
-    await this.loadSettings();
+    // Settings initialization; write defaults first time around.
+    this.settings = Object.assign(DEFAULT_SETTINGS, (await this.loadData()) ?? {});
+    this.addSettingTab(new GeneralSettingsTab(this.app, this));
+
+    //await this.loadSettings();
     this.addCommand({
       id: 'render-paperless-ngx-document',
       name: 'Render Paperless-ngx Document',
@@ -135,6 +139,12 @@ export default class PaperlessNgxPlugin extends Plugin {
     const line = editor.getLine(cursor.line);
     editor.replaceRange(`![[${fileName}]]`, cursor);
   }
+
+  /** Update plugin settings. */
+  async updateSettings(settings: Partial<PaperlessNgxSettings>) {
+      Object.assign(this.settings, settings);
+      await this.saveData(this.settings);
+  }
 }
 
 class AddNumberModal extends Modal {
@@ -169,4 +179,45 @@ class AddNumberModal extends Modal {
   }
 }
 
+/** All of the dataview settings in a single, nice tab. */
+class GeneralSettingsTab extends PluginSettingTab {
+    constructor(app: App, private plugin: PaperlessNgxPlugin) {
+        super(app, plugin);
+    }
+
+    public display(): void {
+        this.containerEl.empty();
+        this.containerEl.createEl("h2", { text: "General settings" });
+
+        new Setting(this.containerEl)
+            .setName("API Url")
+            .setDesc(
+                "URL to api from paperless-ngx. Defaults to 'http://192.168.1.100:1280/api'"
+            )
+            .addText(text =>
+                text
+                    .setPlaceholder("http://192.168.1.100:1280/api")
+                    .setValue(this.plugin.settings.apiUrl)
+                    .onChange(async value => {
+                        if (value.length == 0) return;
+                        await this.plugin.updateSettings({ apiUrl: value });
+                    })
+            );
+
+        new Setting(this.containerEl)
+            .setName("Dummy folder")
+            .setDesc(
+                "Dummy folder for dummy files. Defaults to 'attachments/paperless-ngx'."
+            )
+            .addText(text =>
+                text
+                    .setPlaceholder("attachments/paperless-ngx")
+                    .setValue(this.plugin.settings.dummyFolder)
+                    .onChange(async value => {
+                        if (value.length == 0) return;
+                        await this.plugin.updateSettings({ dummyFolder: value });
+                    })
+            );
+    }
+}
 
